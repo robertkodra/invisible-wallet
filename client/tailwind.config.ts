@@ -49,7 +49,6 @@ module.exports = {
   },
   // eslint-disable-next-line global-require
   plugins: [
-    require("daisyui"),
     plugin(function ({ addVariant, e }) {
       addVariant("svg", ({ modifySelectors, separator }) => {
         modifySelectors(({ className }) => {
@@ -58,17 +57,4 @@ module.exports = {
       });
     }),
   ],
-  daisyui: {
-    themes: [
-      {
-        light: {
-          // eslint-disable-next-line global-require
-          ...require("daisyui/src/theming/themes").light,
-          textColor: {
-            DEFAULT: "#2d3748", // Change to a darker gray or any color you prefer
-          },
-        },
-      },
-    ],
-  },
 };

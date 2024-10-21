@@ -1,4 +1,4 @@
-import { AppConfig } from "../utils/AppConfig";
+import { AppConfig } from "@/utils/AppConfig";
 
 const Logo = () => {
   return (

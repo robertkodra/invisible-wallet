@@ -1,35 +1,37 @@
-// General
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
-// Layout
+
 import Layout from "@/layout/Layout";
 import { Meta } from "@/layout/Meta";
-// API
 import { createWallet } from "@/api/wallet";
 import { invokeContract } from "@/api/transactions";
-// Components
 import Modal from "@/components/Modal";
 import ActionButton from "@/components/ActionButton";
 import Section from "@/components/Section";
-// Hooks
 import { useAuthContext } from "@/hooks/useAuthContext";
 import { useCounter } from "@/hooks/useCounter";
 import { useModal } from "@/hooks/useModal";
-// Utils
 import { AppConfig } from "@/utils/AppConfig";
 
 export default function Index() {
   const { user, dispatch } = useAuthContext();
-  const counter = useCounter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
   const { isOpen, openModal, closeModal } = useModal();
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [userAddress, setUserAddress] = useState<string>("");
+  const counter = useCounter(userAddress);
   const [modalAction, setModalAction] = useState<"deploy" | "increase">(
     "deploy"
   );
 
+  useEffect(() => {
+    if (user?.public_key) {
+      setUserAddress(user.public_key);
+    }
+  }, [user]);
+
   const getExplorerUrl = (transactionHash: string) => {
-    return `https://sepolia.starkscan.co//tx/${transactionHash}`;
+    return `${process.env.NEXT_PUBLIC_STARKSCAN_URL}/tx/${transactionHash}`;
   };
 
   const showWalletDeployedToast = (
@@ -93,10 +95,15 @@ export default function Index() {
       if (modalAction === "deploy") {
         if (!user.public_key) {
           const result = await createWallet(user.token, dispatch, password);
-          if (result) {
-            showWalletDeployedToast(result, "Wallet deployed successfully!");
+          if (result.success) {
+            showWalletDeployedToast(
+              result.data!,
+              "Wallet deployed successfully!"
+            );
           } else {
-            toast.error("Failed to deploy wallet. Please try again.");
+            toast.error(
+              result.error || "Failed to deploy wallet. Please try again."
+            );
           }
         } else {
           toast.info("Wallet is already deployed.");
@@ -145,98 +152,112 @@ export default function Index() {
               <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
             </h1>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Experience the future of digital asset management with Invisible
-              Wallet. Our innovative solution provides a secure, user-friendly
-              interface for interacting with blockchain technology on the
-              Starknet network.
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+              eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
+              enim ad minim veniam, quis nostrud exercitation ullamco laboris
+              nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in
+              reprehenderit in voluptate velit esse cillum dolore eu fugiat
+              nulla pariatur. Excepteur sint occaecat cupidatat non proident,
+              sunt in culpa qui officia deserunt mollit anim id est laborum.
             </p>
           </div>
         </Section>
-
         <Section yPadding="py-20" className="bg-white">
-          <div className="max-w-md mx-auto bg-gray-100 rounded-lg shadow-xl p-8">
-            <h2 className="text-2xl font-bold text-center mb-6 text-blue-600">
-              Invisible Argent Account
-            </h2>
-            <div className="flex flex-col space-y-6">
-              <ActionButton
-                onClick={handleDeployWallet}
-                isDisabled={!user || !!user.public_key}
-                isLoading={isLoading && modalAction === "deploy"}
-                text={
-                  !user
-                    ? "Login to Deploy Wallet"
-                    : user.public_key
-                      ? "Wallet Deployed"
-                      : "Deploy Wallet"
-                }
-                loadingText="Deploying..."
-                color="blue"
-              />
-              <ActionButton
-                onClick={handleCounterContract}
-                isDisabled={!user || !user.public_key}
-                isLoading={isLoading && modalAction === "increase"}
-                text={
-                  !user
-                    ? "Login to Increase Counter"
-                    : !user.public_key
-                      ? "Deploy Wallet First"
-                      : "Increase Counter"
-                }
-                loadingText="Increasing..."
-                color="green"
-              />
-              <div className="rounded-lg p-4 text-center">
-                <p className="text-lg font-semibold text-gray-700">
-                  Counter: {counter}
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row gap-8">
+              {/* Invisible Argent Account */}
+              <div className="flex-1 bg-gray-100 rounded-lg shadow-xl p-8">
+                <h2 className="text-2xl font-bold text-center mb-4 text-blue-600">
+                  Invisible Argent Account
+                </h2>
+                <p className="text-gray-600 mb-6 text-center h-20">
+                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed
+                  do eiusmod tempor incididunt ut labore et dolore magna aliqua.
                 </p>
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <ActionButton
+                      onClick={handleDeployWallet}
+                      isDisabled={!user || !!user.public_key}
+                      isLoading={isLoading && modalAction === "deploy"}
+                      text={"Deploy Wallet"}
+                      loadingText="Deploying..."
+                      color="blue"
+                      className="w-full max-w-xs"
+                    />
+                  </div>
+                  <div className="flex justify-center">
+                    <ActionButton
+                      onClick={handleCounterContract}
+                      isDisabled={!user || !user.public_key}
+                      isLoading={isLoading && modalAction === "increase"}
+                      text={"Increase Counter"}
+                      loadingText="Increasing..."
+                      color="argent"
+                      className="w-full max-w-xs"
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Counter Value:
+                    </p>
+                    <span className="text-2xl font-bold text-blue-600">
+                      {counter}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invisible Braavos Account */}
+              <div className="flex-1 bg-gray-100 rounded-lg shadow-xl p-8">
+                <h2 className="text-2xl font-bold text-center mb-4 text-blue-600">
+                  Invisible Braavos Account
+                </h2>
+                <p className="text-gray-600 mb-6 text-center h-20">
+                  Ut enim ad minim veniam, quis nostrud exercitation ullamco
+                  laboris nisi ut aliquip ex ea commodo consequat.
+                </p>
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <ActionButton
+                      onClick={() => {
+                        /* TODO: Add Braavos deploy logic */
+                      }}
+                      isDisabled={true} // TODO: Update this based on Braavos logic
+                      isLoading={false}
+                      text={"Deploy Wallet"}
+                      loadingText="Deploying..."
+                      color="blue"
+                      className="w-full max-w-xs"
+                    />
+                  </div>
+                  <div className="flex justify-center">
+                    <ActionButton
+                      onClick={() => {
+                        /* TODO: Add Braavos counter logic */
+                      }}
+                      isDisabled={true} // TODO: Update this based on Braavos logic
+                      isLoading={false}
+                      text={"Increase Counter"}
+                      loadingText="Increasing..."
+                      color="braavos"
+                      className="w-full max-w-xs"
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Counter Value:
+                    </p>
+                    <span className="text-2xl font-bold text-blue-600">0</span>{" "}
+                    {/* TODO: Update with actual Braavos counter */}
+                  </div>
+                </div>
               </div>
             </div>
-            {error && (
-              <p className="mt-4 text-red-500 text-center text-sm">{error}</p>
-            )}
           </div>
-        </Section>
-
-        <Section yPadding="py-20">
-          <div className="max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-8 text-blue-600">
-              Future Developments
-            </h2>
-            <ul className="space-y-4 text-gray-600">
-              <li className="flex items-start">
-                <img
-                  src="/checkmark.svg"
-                  alt="Checkmark"
-                  className="w-4 h-4 mr-2 mt-1 svg-green "
-                />
-                <span>
-                  Integration with Braavos accounts for enhanced
-                  interoperability.
-                </span>
-              </li>
-              <li className="flex items-start">
-                <img
-                  src="/checkmark.svg"
-                  alt="Checkmark"
-                  className="w-4 h-4 mr-2 mt-1 svg-green"
-                />
-                <span>
-                  Integration with passkeys for encrypt the private key of the
-                  user.
-                </span>
-              </li>
-              <li className="flex items-start">
-                <img
-                  src="/checkmark.svg"
-                  alt="Checkmark"
-                  className="w-4 h-4 mr-2 mt-1 svg-green"
-                />
-                <span>and more</span>
-              </li>
-            </ul>
-          </div>
+          {error && (
+            <p className="mt-4 text-red-500 text-center text-sm">{error}</p>
+          )}
         </Section>
 
         <Section yPadding="py-20">
@@ -247,7 +268,7 @@ export default function Index() {
             <div className="flex justify-center items-center space-x-12">
               <div className="transform transition-transform duration-300 hover:scale-105">
                 <img
-                  src="/img/avnu.png"
+                  src="/img/avnu_v1.png"
                   alt="Avnu"
                   className="h-24 object-contain"
                 />
@@ -256,6 +277,20 @@ export default function Index() {
                 <img
                   src="/img/starknet-js.png"
                   alt="Starknet.js"
+                  className="h-24 object-contain"
+                />
+              </div>
+              <div className="transform transition-transform duration-300 hover:scale-105">
+                <img
+                  src="/img/argent.png"
+                  alt="Argent"
+                  className="h-24 object-contain"
+                />
+              </div>
+              <div className="transform transition-transform duration-300 hover:scale-105">
+                <img
+                  src="/img/braavos.png"
+                  alt="Braavos"
                   className="h-24 object-contain"
                 />
               </div>

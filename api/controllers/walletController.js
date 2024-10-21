@@ -5,7 +5,7 @@ const sponsorTransaction = async (req, res) => {
 
   const headers = {
     "Content-Type": "application/json",
-    "api-key": `${process.env.PAYMASTER_KEY}`,
+    "api-key": process.env.PAYMASTER_KEY,
   };
 
   const payload = {
@@ -15,31 +15,39 @@ const sponsorTransaction = async (req, res) => {
     protocol: "SNF",
     whitelistedCalls: [
       {
-        contractAddress:
-          "0x51fde0f43ddd951ab883d2736427a0c6fd96fe4d9b13f7c54cbfce8c1a5a325",
-        entrypoint: "0x696e6372656173655f636f756e746572",
+        contractAddress: process.env.CONTRACT_ADDRESS,
+        entrypoint: process.env.CONTRACT_ENTRY_POINT, // hex format needed as per AVNU's docs
       },
     ],
   };
 
   try {
-    console.log("before");
     const result = await axios.post(
-      `https://sepolia.api.avnu.fi/paymaster/v1/accounts/${userAddress}/rewards`,
+      `${PAYMASTER_URL}/paymaster/v1/accounts/${userAddress}/rewards`,
       payload,
       { headers }
     );
-    console.log("after");
-    if (result.status === 200) {
+
+    if (response.status === 200) {
       return res
         .status(200)
-        .json({ success: "Sponsoring transaction successful" });
+        .json({ success: true, message: "Sponsoring transaction successful" });
     } else {
-      return res.status(400).json({ error: "Sponsoring transaction failed" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Sponsoring transaction failed" });
     }
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error: error });
+    console.error(
+      "Error in sponsorTransaction:",
+      error.response?.data || error.message
+    );
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 

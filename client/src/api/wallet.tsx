@@ -1,3 +1,4 @@
+import { Dispatch } from "react";
 import {
   Account,
   ec,
@@ -10,6 +11,7 @@ import {
   CairoOptionVariant,
   CairoCustomEnum,
   num,
+  selector,
 } from "starknet";
 import {
   GaslessOptions,
@@ -18,36 +20,27 @@ import {
   DeploymentData,
   fetchExecuteTransaction,
 } from "@avnu/gasless-sdk";
-import { Dispatch } from "react";
-import { AuthAction } from "../context/AuthContext";
+
+import { AuthAction } from "@/context/AuthContext";
 import { encryptPrivateKey } from "@/utils/encryption";
 
 const options: GaslessOptions = {
   baseUrl: SEPOLIA_BASE_URL,
   apiKey: process.env.NEXT_PUBLIC_PAYMASTER_KEY,
 };
-const initialValue: Call[] = [
-  {
-    contractAddress:
-      "0x51fde0f43ddd951ab883d2736427a0c6fd96fe4d9b13f7c54cbfce8c1a5a325",
-    entrypoint: "get_counter",
-    calldata: [],
-  },
-];
 
 const createWallet = async (
   userToken: string,
   dispatch: Dispatch<AuthAction>,
   password: string
-): Promise<string | null | undefined> => {
+): Promise<{ success: boolean; data?: string; error?: string }> => {
   const provider = new RpcProvider({
     nodeUrl: process.env.RPC_URL as string,
   });
 
+  // Private key Stark Curve
   const privateKeyAX = stark.randomAddress();
-  console.log("AX account Private Key =", privateKeyAX);
   const starkKeyPubAX = ec.starkCurve.getStarkKey(privateKeyAX);
-  console.log("AX account Public Key  =", starkKeyPubAX);
 
   //Argent X Account v0.4.0
   const argentXaccountClassHash = process.env
@@ -66,9 +59,18 @@ const createWallet = async (
     AXConstructorCallData,
     0
   );
-  console.log("Precalculated account address=", AXcontractAddress);
 
   const accountAX = new Account(provider, AXcontractAddress, privateKeyAX);
+
+  const initialValue: Call[] = [
+    {
+      contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+      entrypoint:
+        process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_GET_COUNTER?.toString() ||
+        "get_counter",
+      calldata: [AXcontractAddress],
+    },
+  ];
 
   try {
     const typeData = await fetchBuildTypedData(
@@ -97,31 +99,47 @@ const createWallet = async (
       deploymentData
     );
 
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/profile/update`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${userToken}`,
-      },
-      body: JSON.stringify({
-        publicKey: AXcontractAddress,
-        privateKey: encryptPrivateKey(privateKeyAX, password),
-      }),
-    });
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/profile/`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({
+          publicKey: AXcontractAddress,
+          privateKey: encryptPrivateKey(privateKeyAX, password),
+        }),
+      }
+    );
 
-    // update local storage with public_key
-    let user = JSON.parse(localStorage.getItem("user"));
+    if (response.ok) {
+      // update local storage with public_key
+      let user = JSON.parse(localStorage.getItem("user"));
 
-    if (user) {
-      user.public_key = AXcontractAddress;
-      localStorage.setItem("user", JSON.stringify(user));
+      if (user) {
+        user.public_key = AXcontractAddress;
+        localStorage.setItem("user", JSON.stringify(user));
 
-      dispatch({ type: "LOGIN", payload: user });
+        dispatch({ type: "LOGIN", payload: user });
+      }
+
+      return { success: true, data: executeTransaction.transactionHash };
+    } else {
+      const errorData = await response.json();
+      return {
+        success: false,
+        error: errorData.error || "Failed to update profile",
+      };
     }
-
-    return executeTransaction.transactionHash;
   } catch (error: any) {
-    console.log("Error:", error);
+    console.log(error);
+    console.error("Error:", error);
+    return {
+      success: false,
+      error: error.message || "An unexpected error occurred",
+    };
   }
 };
 

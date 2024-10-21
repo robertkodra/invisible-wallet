@@ -1,17 +1,14 @@
-import "../styles/globals.css";
-import "react-toastify/dist/ReactToastify.css";
+import { AppProps } from "next/app";
 import { ToastContainer } from "react-toastify";
-import dotenv from "dotenv";
-import type { AppProps } from "next/app";
+
 import { AuthContextProvider } from "@/context/AuthContext";
 
-dotenv.config();
+import "../styles/globals.css";
+import "react-toastify/dist/ReactToastify.css";
 
 const MyApp = ({ Component, pageProps }: AppProps) => (
-  <>
-    <AuthContextProvider>
-      <Component {...pageProps} />
-    </AuthContextProvider>
+  <AuthContextProvider>
+    <Component {...pageProps} />
     <ToastContainer
       position="bottom-right"
       autoClose={5000}
@@ -22,8 +19,9 @@ const MyApp = ({ Component, pageProps }: AppProps) => (
       pauseOnFocusLoss
       draggable
       pauseOnHover
+      theme="light"
     />
-  </>
+  </AuthContextProvider>
 );
 
 export default MyApp;

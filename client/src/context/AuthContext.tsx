@@ -6,12 +6,10 @@ import {
   useEffect,
 } from "react";
 
-// Define types for user and actions
 type User = {
   id: string;
   name: string;
   public_key?: string;
-  // Add more fields as needed
 } | null;
 
 export type AuthAction = { type: "LOGIN"; payload: User } | { type: "LOGOUT" };
@@ -20,17 +18,14 @@ type AuthState = {
   user: User;
 };
 
-// Create context types
 interface AuthContextType extends AuthState {
   dispatch: Dispatch<AuthAction>;
 }
 
-// Create the AuthContext
 export const AuthContext = createContext<AuthContextType | undefined>(
   undefined
 );
 
-// Reducer function
 export const authReducer = (
   state: AuthState,
   action: AuthAction
@@ -45,12 +40,21 @@ export const authReducer = (
   }
 };
 
-// Define props for AuthContextProvider
 interface AuthContextProviderProps {
   children: ReactNode;
 }
 
-// Context Provider component
+/**
+ * AuthContextProvider component
+ *
+ * This component provides the authentication context to its children.
+ * It manages the user's authentication state, including login, and logout.
+ * It also handles the persistence of the user's authentication state in localStorage.
+ *
+ * @param {Object} props - The component props
+ * @param {ReactNode} props.children - The child components to be wrapped by this provider
+ * @returns {JSX.Element} The provider component wrapping its children
+ */
 export const AuthContextProvider = ({ children }: AuthContextProviderProps) => {
   const [state, dispatch] = useReducer(authReducer, {
     user: null,
@@ -61,8 +65,6 @@ export const AuthContextProvider = ({ children }: AuthContextProviderProps) => {
 
     if (user) dispatch({ type: "LOGIN", payload: user });
   }, []);
-
-  console.log("AuthContext state:", state);
 
   return (
     <AuthContext.Provider value={{ ...state, dispatch }}>

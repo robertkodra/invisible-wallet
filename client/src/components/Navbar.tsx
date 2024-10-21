@@ -1,7 +1,8 @@
+import { useState } from "react";
 import Link from "next/link";
+
 import { useLogout } from "@/hooks/useLogout";
 import { useAuthContext } from "@/hooks/useAuthContext";
-import { useState } from "react";
 
 const NetworkIndicator = () => {
   const [isHovered, setIsHovered] = useState(false);

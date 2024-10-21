@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useAuthContext } from "../hooks/useAuthContext";
+
+import { useAuthContext } from "@/hooks/useAuthContext";
 
 export const useGetProfile = () => {
   const { user } = useAuthContext();
@@ -17,7 +18,7 @@ export const useGetProfile = () => {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/profile/user`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/profile/`,
         {
           method: "GET",
           headers: {
@@ -41,7 +42,7 @@ export const useGetProfile = () => {
     }
   };
 
-  // Automatically fetch the profile when user is present
+  // Fetch the profile when user is present
   useEffect(() => {
     if (user && user.token) {
       getProfile();

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useAuthContext } from "./useAuthContext";
+
+import { useAuthContext } from "@/hooks/useAuthContext";
 
 export const useSignup = () => {
   const [error, setError] = useState<string | null>(null);
@@ -24,11 +25,11 @@ export const useSignup = () => {
 
       if (!response.ok) {
         setError(json.error);
-        return null; // Return null if signup failed
+        return null;
       } else {
         localStorage.setItem("user", JSON.stringify(json));
         dispatch({ type: "LOGIN", payload: json });
-        return json; // Return user data if signup succeeded
+        return json;
       }
     } catch (err) {
       setError("An error occurred during signup");

@@ -1,4 +1,4 @@
-import { Account, RpcProvider, Call, num } from "starknet";
+import { Account, RpcProvider, Call, num, selector } from "starknet";
 
 import {
   GaslessOptions,
@@ -6,7 +6,6 @@ import {
   fetchBuildTypedData,
   fetchExecuteTransaction,
 } from "@avnu/gasless-sdk";
-
 import { decryptPrivateKey } from "@/utils/encryption";
 
 const options: GaslessOptions = {
@@ -15,43 +14,60 @@ const options: GaslessOptions = {
 };
 const initialValue: Call[] = [
   {
-    contractAddress:
-      "0x51fde0f43ddd951ab883d2736427a0c6fd96fe4d9b13f7c54cbfce8c1a5a325",
-    entrypoint: "increase_counter",
+    contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+    entrypoint:
+      process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER?.toString() ||
+      "increase_counter",
     calldata: [],
   },
 ];
 
-const invokeContract = async (
+/**
+ * Invokes the contract to increase the counter.
+ * @param userAddress - The user's wallet address
+ * @param userToken - The user's authentication token
+ * @param password - The user's password for decrypting the private key
+ * @returns The transaction hash if successful, null otherwise
+ */
+export const invokeContract = async (
   userAddress: string,
   userToken: string,
   password: string
-): Promise<string | null | undefined> => {
-  // get private key
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/profile/privatekey`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${userToken}`,
-      },
-    }
-  );
-  const json = await response.json();
-  const privateKeyDecrypted = decryptPrivateKey(json.privateKey, password);
-
-  console.log(userAddress);
-
-  // setup the account
-  const provider = new RpcProvider({
-    nodeUrl: process.env.RPC_URL as string,
-  });
-
-  const accountAX = new Account(provider, userAddress, privateKeyDecrypted);
-
+): Promise<string | null> => {
   try {
-    // build the type data
+    // Fetch the encrypted private key
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/profile/privatekey`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch the encrypted private key: ${response.statusText}`
+      );
+    }
+
+    const json = await response.json();
+    const privateKeyDecrypted = decryptPrivateKey(json.privateKey, password);
+
+    if (!privateKeyDecrypted) {
+      throw new Error("Failed to decrypt private key");
+    }
+
+    // Setup the account for signing
+    const provider = new RpcProvider({
+      nodeUrl: process.env.RPC_URL as string,
+    });
+
+    const accountAX = new Account(provider, userAddress, privateKeyDecrypted);
+
+    // Build the type data
     const typeData = await fetchBuildTypedData(
       userAddress,
       initialValue,
@@ -60,10 +76,10 @@ const invokeContract = async (
       options
     );
 
-    // sign the message
+    // Sign the message
     const userSignature = await accountAX.signMessage(typeData);
 
-    // execute
+    // Execute the transaction
     const executeTransaction = await fetchExecuteTransaction(
       userAddress,
       JSON.stringify(typeData),
@@ -71,14 +87,18 @@ const invokeContract = async (
       options
     );
 
-    console.log("Increased counter successfully! ");
     return executeTransaction.transactionHash;
   } catch (error) {
-    console.log(error);
+    console.error("Error invoking contract:", error);
+    return null;
   }
 };
 
-const getCounterValue = async (): Promise<number> => {
+/**
+ * Retrieves the current counter value from the contract.
+ * @returns The current counter value, or 0 if an error occurs
+ */
+export const getCounterValue = async (userAddress: string): Promise<number> => {
   const rpcUrl =
     process.env.NEXT_PUBLIC_RPC_URL ||
     "https://free-rpc.nethermind.io/sepolia-juno/";
@@ -89,11 +109,12 @@ const getCounterValue = async (): Promise<number> => {
     id: 1,
     params: [
       {
-        contract_address:
-          "0x51fde0f43ddd951ab883d2736427a0c6fd96fe4d9b13f7c54cbfce8c1a5a325",
-        entry_point_selector:
-          "0x03370263ab53343580e77063a719a5865004caff7f367ec136a6cdd34b6786ca",
-        calldata: [],
+        contract_address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+        entry_point_selector: selector.getSelectorFromName(
+          process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_GET_COUNTER?.toString() ||
+            "get_counter"
+        ),
+        calldata: [userAddress],
       },
       "latest",
     ],
@@ -113,6 +134,7 @@ const getCounterValue = async (): Promise<number> => {
     }
 
     const data = await response.json();
+
     const newCounterValue = num.hexToDecimalString(data.result[0]);
 
     return Number(newCounterValue);
@@ -121,5 +143,3 @@ const getCounterValue = async (): Promise<number> => {
     return 0;
   }
 };
-
-export { invokeContract, getCounterValue };

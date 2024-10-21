@@ -27,11 +27,10 @@ const Modal: React.FC<ModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(password);
-    // Don't clear password here, as it might close before the loading state is shown
   };
 
   const handleClose = () => {
-    setPassword(""); // Clear password when manually closed
+    setPassword("");
     onClose();
   };
 

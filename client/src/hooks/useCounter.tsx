@@ -1,21 +1,27 @@
-// hooks/useCounter.ts
 import { useState, useEffect } from "react";
+
 import { getCounterValue } from "@/api/transactions";
 
-export const useCounter = () => {
+export const useCounter = (userAddress: string) => {
   const [counter, setCounter] = useState(0);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
     const fetchCounter = async () => {
-      const value = await getCounterValue();
-      setCounter(value);
+      if (userAddress) {
+        const value = await getCounterValue(userAddress);
+        setCounter(value);
+      }
     };
 
     fetchCounter();
-    const intervalId = setInterval(fetchCounter, 5000);
+    intervalId = setInterval(fetchCounter, 1000);
 
-    return () => clearInterval(intervalId);
-  }, []);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [userAddress]);
 
   return counter;
 };

@@ -3,32 +3,41 @@ const bcrypt = require("bcrypt");
 const validator = require("validator");
 const Schema = mongoose.Schema;
 
-const userSchema = new Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-  },
+const userSchema = new Schema(
+  {
+    email: {
+      type: String,
+      required: [true, "Email is required"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      validate: [validator.isEmail, "Please provide a valid email"],
+    },
 
-  password: {
-    type: String,
-    required: true,
-  },
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+      minlength: [8, "Password must be at least 8 characters long"],
+    },
 
-  public_key: {
-    type: String,
-    required: false,
+    public_key: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    private_key: {
+      type: String,
+      required: false,
+      trim: true,
+    },
   },
-
-  private_key: {
-    type: String,
-    required: false,
-  },
-});
+  {
+    timestamps: true,
+  }
+);
 
 // Static Signup Method
 userSchema.statics.signup = async function (email, password) {
-  // validation
   if (!email || !password) {
     throw Error("All field must be filled.");
   }
@@ -60,7 +69,6 @@ userSchema.statics.signup = async function (email, password) {
 
 // Static Login Method
 userSchema.statics.login = async function (email, password) {
-  // validation
   if (!email || !password) {
     throw Error("All field must be filled.");
   }
@@ -68,13 +76,13 @@ userSchema.statics.login = async function (email, password) {
   const user = await this.findOne({ email });
 
   if (!user) {
-    throw Error("Incorrect email.");
+    throw Error("Incorrect credentials.");
   }
 
   const match = await bcrypt.compare(password, user.password);
 
   if (!match) {
-    throw Error("Incorrect password.");
+    throw Error("Incorrect credentials.");
   }
 
   return user;

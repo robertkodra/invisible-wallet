@@ -8,14 +8,16 @@ const {
 
 const router = express.Router();
 
-// require auth for all routes
+// Require auth for all routes
 router.use(requireAuth);
 
-// get profile
-router.get("/user", getUserProfile);
+// Get profile information
+router.get("/", getUserProfile);
 
+// Get private key
 router.get("/privatekey", getUserPrivateKey);
 
-router.post("/update", updateUserProfile);
+// Update profile information
+router.put("/", updateUserProfile);
 
 module.exports = router;

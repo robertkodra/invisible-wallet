@@ -1,6 +1,6 @@
 export const AppConfig = {
-  site_name: "Invisibilis Pera",
-  title: "Invisibilis Pera",
-  description: "Invisibilia non sunt semper ignota.",
+  site_name: "Invisible Wallets",
+  title: "Invisible Wallets",
+  description: "Invisible is not absent; it's the essence of power unseen.",
   locale: "en",
 };
