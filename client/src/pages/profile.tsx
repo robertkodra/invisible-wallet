@@ -43,7 +43,14 @@ const ProfileInfo: React.FC<ProfileInfoProps> = ({
 const Profile: React.FC = () => {
   const { user } = useAuthContext();
   const router = useRouter();
-  const { isLoading, error, userPublicKey, userPrivateKey } = useGetProfile();
+  const {
+    isLoading,
+    error,
+    argentPublicKey,
+    argentPrivateKey,
+    braavosPublicKey,
+    braavosPrivateKey,
+  } = useGetProfile();
   const { isOpen, openModal, closeModal } = useModal();
   const [selectedWallet, setSelectedWallet] = useState<
     "argent" | "braavos" | null
@@ -66,15 +73,21 @@ const Profile: React.FC = () => {
   useEffect(() => {
     if (!isLoading) {
       setArgentKeys({
-        publicKey: userPublicKey || "",
-        privateKey: userPrivateKey || "",
+        publicKey: argentPublicKey || "",
+        privateKey: argentPrivateKey || "",
       });
       setBraavosKeys({
-        publicKey: "", // TODO: add Braavos when lvie
-        privateKey: "",
+        publicKey: braavosPublicKey || "",
+        privateKey: braavosPrivateKey || "",
       });
     }
-  }, [isLoading, userPublicKey, userPrivateKey]);
+  }, [
+    isLoading,
+    argentPublicKey,
+    argentPrivateKey,
+    braavosPublicKey,
+    braavosPrivateKey,
+  ]);
 
   const handleCopyPrivateKey = (wallet: "argent" | "braavos") => {
     setSelectedWallet(wallet);

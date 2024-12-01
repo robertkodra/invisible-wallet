@@ -6,14 +6,20 @@ export const useGetProfile = () => {
   const { user } = useAuthContext();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [userPublicKey, setUserPublicKey] = useState<string | null>(null);
-  const [userPrivateKey, setUserPrivateKey] = useState<string | null>(null);
+  const [argentPublicKey, setArgentPublicKey] = useState<string | null>(null);
+  const [argentPrivateKey, setArgentPrivateKey] = useState<string | null>(null);
+  const [braavosPublicKey, setBraavosPublicKey] = useState<string | null>(null);
+  const [braavosPrivateKey, setBraavosPrivateKey] = useState<string | null>(
+    null
+  );
 
   const getProfile = async () => {
     if (!user || !user.token) return;
 
-    setUserPrivateKey(null);
-    setUserPublicKey(null);
+    setArgentPublicKey(null);
+    setArgentPrivateKey(null);
+    setBraavosPublicKey(null);
+    setBraavosPrivateKey(null);
     setIsLoading(true);
 
     try {
@@ -32,8 +38,10 @@ export const useGetProfile = () => {
       if (!response.ok) {
         setError(json.error || "Failed to fetch profile");
       } else {
-        setUserPublicKey(json.user.public_key);
-        setUserPrivateKey(json.user.private_key);
+        setArgentPublicKey(json.user.argent_public_key);
+        setArgentPrivateKey(json.user.argent_private_key);
+        setBraavosPublicKey(json.user.braavos_public_key);
+        setBraavosPrivateKey(json.user.braavos_private_key);
       }
     } catch (err) {
       console.log("Error fetching profile.");
@@ -49,5 +57,12 @@ export const useGetProfile = () => {
     }
   }, [user]);
 
-  return { isLoading, error, userPublicKey, userPrivateKey };
+  return {
+    isLoading,
+    error,
+    argentPublicKey,
+    argentPrivateKey,
+    braavosPublicKey,
+    braavosPrivateKey,
+  };
 };

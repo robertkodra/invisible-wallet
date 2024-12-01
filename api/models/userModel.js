@@ -20,12 +20,23 @@ const userSchema = new Schema(
       minlength: [8, "Password must be at least 8 characters long"],
     },
 
-    public_key: {
+    argent_public_key: {
       type: String,
       required: false,
       trim: true,
     },
-    private_key: {
+    argent_private_key: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+
+    braavos_public_key: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    braavos_private_key: {
       type: String,
       required: false,
       trim: true,

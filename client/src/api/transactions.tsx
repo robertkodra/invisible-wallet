@@ -12,6 +12,7 @@ const options: GaslessOptions = {
   baseUrl: SEPOLIA_BASE_URL,
   apiKey: process.env.NEXT_PUBLIC_PAYMASTER_KEY,
 };
+
 const initialValue: Call[] = [
   {
     contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
@@ -32,12 +33,13 @@ const initialValue: Call[] = [
 export const invokeContract = async (
   userAddress: string,
   userToken: string,
-  password: string
+  password: string,
+  wallet: string
 ): Promise<string | null> => {
   try {
     // Fetch the encrypted private key
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/profile/privatekey`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/profile/${wallet}/privatekey`,
       {
         method: "GET",
         headers: {
@@ -60,7 +62,7 @@ export const invokeContract = async (
       throw new Error("Failed to decrypt private key");
     }
 
-    // Setup the account for signing
+    // Initialising the provider
     const provider = new RpcProvider({
       nodeUrl: process.env.RPC_URL as string,
     });

@@ -3,7 +3,7 @@ import { toast } from "react-toastify";
 
 import Layout from "@/layout/Layout";
 import { Meta } from "@/layout/Meta";
-import { createWallet } from "@/api/wallet";
+import { createArgentWallet, createBraavosWallet } from "@/api/wallet";
 import { invokeContract } from "@/api/transactions";
 import Modal from "@/components/Modal";
 import ActionButton from "@/components/ActionButton";
@@ -18,18 +18,25 @@ export default function Index() {
   const { isOpen, openModal, closeModal } = useModal();
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [userAddress, setUserAddress] = useState<string>("");
-  const counter = useCounter(userAddress);
-  const [modalAction, setModalAction] = useState<"deploy" | "increase">(
-    "deploy"
-  );
+  const [userAddress, setUserAddress] = useState<{
+    argent: string | null;
+    braavos: string | null;
+  }>({ argent: null, braavos: null });
+  const argentCounter = useCounter(userAddress.argent);
+  const braavosCounter = useCounter(userAddress.braavos);
+  const [modalAction, setModalAction] = useState<{
+    type: "deploy" | "increase";
+    wallet: "argent" | "braavos";
+  }>({ type: "deploy", wallet: "argent" });
 
   useEffect(() => {
-    if (user?.public_key) {
-      setUserAddress(user.public_key);
+    if (user) {
+      setUserAddress({
+        argent: user.argent_account || null, // Changed from argent_public_key
+        braavos: user.braavos_account || null, // Changed from braavos_public_key
+      });
     }
   }, [user]);
-
   const getExplorerUrl = (transactionHash: string) => {
     return `${process.env.NEXT_PUBLIC_STARKSCAN_URL}/tx/${transactionHash}`;
   };
@@ -58,33 +65,39 @@ export default function Index() {
     );
   };
 
-  const handleDeployWallet = () => {
+  const handleDeployWallet = (wallet: "argent" | "braavos") => {
     if (!user) {
       toast.error("Please log in to deploy a wallet.");
       return;
     }
 
-    if (user.public_key) {
-      toast.info("Wallet is already deployed.");
+    const hasWallet =
+      wallet === "argent" ? user.argent_account : user.braavos_account;
+
+    if (hasWallet) {
+      toast.info(`${wallet} wallet is already deployed.`);
       return;
     }
 
-    setModalAction("deploy");
+    setModalAction({ type: "deploy", wallet });
     openModal();
   };
 
-  const handleCounterContract = () => {
+  const handleCounterContract = (wallet: "argent" | "braavos") => {
     if (!user) {
       toast.error("Please log in to increase the counter.");
       return;
     }
 
-    if (!user.public_key) {
-      toast.error("Please deploy a wallet first.");
+    const hasWallet =
+      wallet === "argent" ? user.argent_account : user.braavos_account;
+
+    if (!hasWallet) {
+      toast.error(`Please deploy a ${wallet} wallet first.`);
       return;
     }
 
-    setModalAction("increase");
+    setModalAction({ type: "increase", wallet });
     openModal();
   };
 
@@ -92,28 +105,46 @@ export default function Index() {
     setIsLoading(true);
     setError("");
     try {
-      if (modalAction === "deploy") {
-        if (!user.public_key) {
-          const result = await createWallet(user.token, dispatch, password);
-          if (result.success) {
+      if (modalAction.type === "deploy") {
+        const hasWallet =
+          modalAction.wallet === "argent"
+            ? user.argent_account
+            : user.braavos_account;
+
+        if (!hasWallet) {
+          const createWalletFn =
+            modalAction.wallet === "argent"
+              ? createArgentWallet
+              : createBraavosWallet;
+
+          const result = await createWalletFn(user.token, dispatch, password);
+
+          if (result?.success) {
+            // Added optional chaining
             showWalletDeployedToast(
               result.data!,
-              "Wallet deployed successfully!"
+              `${modalAction.wallet.charAt(0).toUpperCase() + modalAction.wallet.slice(1)} wallet deployed successfully!`
             );
           } else {
             toast.error(
-              result.error || "Failed to deploy wallet. Please try again."
+              result?.error || "Failed to deploy wallet. Please try again." // Added optional chaining
             );
           }
         } else {
-          toast.info("Wallet is already deployed.");
+          toast.info(`${modalAction.wallet} wallet is already deployed.`);
         }
-      } else if (modalAction === "increase") {
-        if (user?.public_key && user.token) {
+      } else if (modalAction.type === "increase") {
+        const publicKey =
+          modalAction.wallet === "argent"
+            ? user.argent_account
+            : user.braavos_account;
+
+        if (publicKey && user.token) {
           const result = await invokeContract(
-            user.public_key,
+            publicKey,
             user.token,
-            password
+            password,
+            modalAction.wallet
           );
           if (result) {
             showWalletDeployedToast(result, "Counter increased successfully!");
@@ -124,21 +155,20 @@ export default function Index() {
       }
     } catch (error) {
       console.error(
-        `Error ${modalAction === "deploy" ? "deploying wallet" : "increasing counter"}:`,
+        `Error ${modalAction.type === "deploy" ? "deploying wallet" : "increasing counter"}:`,
         error
       );
       setError(
-        `Failed to ${modalAction === "deploy" ? "deploy wallet" : "increase counter"}. Please try again.`
+        `Failed to ${modalAction.type === "deploy" ? "deploy wallet" : "increase counter"}. Please try again.`
       );
       toast.error(
-        `Failed to ${modalAction === "deploy" ? "deploy wallet" : "increase counter"}. Please try again.`
+        `Failed to ${modalAction.type === "deploy" ? "deploy wallet" : "increase counter"}. Please try again.`
       );
     } finally {
       setIsLoading(false);
       closeModal();
     }
   };
-
   return (
     <Layout>
       <Meta title={AppConfig.title} description={AppConfig.description} />
@@ -177,9 +207,13 @@ export default function Index() {
                 <div className="space-y-6">
                   <div className="flex justify-center">
                     <ActionButton
-                      onClick={handleDeployWallet}
-                      isDisabled={!user || !!user.public_key}
-                      isLoading={isLoading && modalAction === "deploy"}
+                      onClick={() => handleDeployWallet("argent")}
+                      isDisabled={!user || !!user.argent_account}
+                      isLoading={
+                        isLoading &&
+                        modalAction.type === "deploy" &&
+                        modalAction.wallet === "argent"
+                      }
                       text={"Deploy Wallet"}
                       loadingText="Deploying..."
                       color="blue"
@@ -188,9 +222,13 @@ export default function Index() {
                   </div>
                   <div className="flex justify-center">
                     <ActionButton
-                      onClick={handleCounterContract}
-                      isDisabled={!user || !user.public_key}
-                      isLoading={isLoading && modalAction === "increase"}
+                      onClick={() => handleCounterContract("argent")}
+                      isDisabled={!user || !user.argent_account}
+                      isLoading={
+                        isLoading &&
+                        modalAction.type === "increase" &&
+                        modalAction.wallet === "argent"
+                      }
                       text={"Increase Counter"}
                       loadingText="Increasing..."
                       color="argent"
@@ -202,7 +240,7 @@ export default function Index() {
                       Counter Value:
                     </p>
                     <span className="text-2xl font-bold text-blue-600">
-                      {counter}
+                      {argentCounter}
                     </span>
                   </div>
                 </div>
@@ -220,11 +258,14 @@ export default function Index() {
                 <div className="space-y-6">
                   <div className="flex justify-center">
                     <ActionButton
-                      onClick={() => {
-                        /* TODO: Add Braavos deploy logic */
-                      }}
-                      isDisabled={true} // TODO: Update this based on Braavos logic
-                      isLoading={false}
+                      onClick={() => handleDeployWallet("braavos")}
+                      isDisabled={!user || !!user.braavos_account}
+                      // isDisabled={true}
+                      isLoading={
+                        isLoading &&
+                        modalAction.type === "deploy" &&
+                        modalAction.wallet === "braavos"
+                      }
                       text={"Deploy Wallet"}
                       loadingText="Deploying..."
                       color="blue"
@@ -233,11 +274,13 @@ export default function Index() {
                   </div>
                   <div className="flex justify-center">
                     <ActionButton
-                      onClick={() => {
-                        /* TODO: Add Braavos counter logic */
-                      }}
-                      isDisabled={true} // TODO: Update this based on Braavos logic
-                      isLoading={false}
+                      onClick={() => handleCounterContract("braavos")}
+                      isDisabled={!user || !user.braavos_account}
+                      isLoading={
+                        isLoading &&
+                        modalAction.type === "increase" &&
+                        modalAction.wallet === "braavos"
+                      }
                       text={"Increase Counter"}
                       loadingText="Increasing..."
                       color="braavos"
@@ -249,7 +292,7 @@ export default function Index() {
                       Counter Value:
                     </p>
                     <span className="text-2xl font-bold text-blue-600">0</span>{" "}
-                    {/* TODO: Update with actual Braavos counter */}
+                    {braavosCounter}
                   </div>
                 </div>
               </div>

@@ -18,8 +18,7 @@ const NetworkIndicator = () => {
       </span>
       {isHovered && (
         <div className="absolute z-10 w-64 px-4 py-2 mt-2 text-sm text-gray-700 bg-white rounded-lg shadow-lg">
-          This project is currently running on Sepolia testnet. It is not yet
-          available on Mainnet.
+          This project is currently running on Sepolia testnet.
         </div>
       )}
     </div>

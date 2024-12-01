@@ -1,4 +1,5 @@
 use starknet::{ContractAddress};
+
 #[starknet::interface]
 pub trait ICounter<T>{
     fn get_counter(self: @T, caller: ContractAddress) -> u32;
@@ -7,7 +8,7 @@ pub trait ICounter<T>{
 
 #[starknet::contract]
 pub mod counter_contract {
-    use super::ICounter;
+    use super::{ICounter};
     use starknet::event::EventEmitter;
     use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map
@@ -31,6 +32,7 @@ pub mod counter_contract {
         pub value: u32,
     }
 
+
     #[abi(embed_v0)]
     impl CounterImpl of ICounter<ContractState>{
         fn get_counter(self: @ContractState, caller: ContractAddress) -> u32 {
@@ -45,5 +47,6 @@ pub mod counter_contract {
             self.emit( CounterIncreased {by: caller, value: self.get_counter(caller)}); 
             
         }
+
     }
 }

@@ -3,7 +3,8 @@ const express = require("express");
 const {
   getUserProfile,
   updateUserProfile,
-  getUserPrivateKey,
+  getArgentPrivateKey,
+  getBraavosPrivateKey,
 } = require("../controllers/profileController");
 
 const router = express.Router();
@@ -15,7 +16,8 @@ router.use(requireAuth);
 router.get("/", getUserProfile);
 
 // Get private key
-router.get("/privatekey", getUserPrivateKey);
+router.get("/argent/privatekey", getArgentPrivateKey);
+router.get("/braavos/privatekey", getBraavosPrivateKey);
 
 // Update profile information
 router.put("/", updateUserProfile);
