@@ -1,7 +1,5 @@
 # Invisible Wallets
 
-[Description]
-
 ## Table of Contents
 
 - [Installation & Run](#run-from-source)
