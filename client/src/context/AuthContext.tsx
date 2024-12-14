@@ -9,7 +9,16 @@ import {
 type User = {
   id: string;
   name: string;
-  public_key?: string;
+  argent_account?: string;
+  argent_public_key?: string;
+  braavos_account?: string;
+  braavos_public_key?: string;
+  token: string;
+  session?: {
+    expiry: number;
+    wallet: 'argent' | 'braavos';
+    dappKey?: string;
+  }
 } | null;
 
 export type AuthAction = { type: "LOGIN"; payload: User } | { type: "LOGOUT" };

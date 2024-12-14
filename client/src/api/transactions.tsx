@@ -1,5 +1,4 @@
 import { Account, RpcProvider, Call, num, selector } from "starknet";
-
 import {
   GaslessOptions,
   SEPOLIA_BASE_URL,
@@ -7,36 +6,79 @@ import {
   fetchExecuteTransaction,
 } from "@avnu/gasless-sdk";
 import { decryptPrivateKey } from "@/utils/encryption";
+import { SessionService } from "@/services/SessionService";
+import { toast } from "react-toastify";
 
 const options: GaslessOptions = {
   baseUrl: SEPOLIA_BASE_URL,
   apiKey: process.env.NEXT_PUBLIC_PAYMASTER_KEY,
 };
 
-const initialValue: Call[] = [
-  {
-    contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
-    entrypoint:
-      process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER?.toString() ||
-      "increase_counter",
-    calldata: [],
-  },
-];
-
 /**
- * Invokes the contract to increase the counter.
+ * Invokes the contract to increase the counter using either session or password.
  * @param userAddress - The user's wallet address
  * @param userToken - The user's authentication token
- * @param password - The user's password for decrypting the private key
+ * @param password - Optional password for non-session transactions
+ * @param wallet - The wallet type ('argent' or 'braavos')
  * @returns The transaction hash if successful, null otherwise
  */
 export const invokeContract = async (
   userAddress: string,
   userToken: string,
-  password: string,
-  wallet: string
+  password: string | null,
+  wallet: "argent" | "braavos"
 ): Promise<string | null> => {
   try {
+    const provider = new RpcProvider({
+      nodeUrl: process.env.RPC_URL as string,
+    });
+
+    const contractCall = {
+      contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+      entrypoint: process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter",
+      calldata: []
+    };
+
+    // Handle Argent wallet with session
+    if (wallet === "argent") {
+      const sessionAccount = await SessionService.getArgentSessionAccount(provider, userAddress);
+
+      if (sessionAccount) {
+        try {
+          // Execute directly with session account
+          const tx = await sessionAccount.execute(contractCall);
+          
+          // Use AVNU's paymaster
+          const typeData = await fetchBuildTypedData(
+            userAddress,
+            [tx],
+            undefined,
+            undefined,
+            options
+          );
+
+          const userSignature = await sessionAccount.signMessage(typeData);
+
+          const executeTransaction = await fetchExecuteTransaction(
+            userAddress,
+            JSON.stringify(typeData),
+            userSignature,
+            options
+          );
+
+          return executeTransaction.transactionHash;
+        } catch (e) {
+          console.error("Session execution error:", (e as SignSessionError).cause);
+          // If session execution fails, fall back to password flow
+        }
+      }
+    }
+
+    // If no session (or Braavos wallet), use password flow
+    if (!password) {
+      throw new Error("Password required for transaction");
+    }
+
     // Fetch the encrypted private key
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/profile/${wallet}/privatekey`,
@@ -50,9 +92,7 @@ export const invokeContract = async (
     );
 
     if (!response.ok) {
-      throw new Error(
-        `Failed to fetch the encrypted private key: ${response.statusText}`
-      );
+      throw new Error("Failed to fetch private key");
     }
 
     const json = await response.json();
@@ -62,26 +102,21 @@ export const invokeContract = async (
       throw new Error("Failed to decrypt private key");
     }
 
-    // Initialising the provider
-    const provider = new RpcProvider({
-      nodeUrl: process.env.RPC_URL as string,
-    });
+    // Create regular account instance
+    const account = new Account(provider, userAddress, privateKeyDecrypted);
 
-    const accountAX = new Account(provider, userAddress, privateKeyDecrypted);
-
-    // Build the type data
+    // Build type data for AVNU's paymaster
     const typeData = await fetchBuildTypedData(
       userAddress,
-      initialValue,
+      [contractCall],
       undefined,
       undefined,
       options
     );
 
-    // Sign the message
-    const userSignature = await accountAX.signMessage(typeData);
+    // Sign and execute transaction
+    const userSignature = await account.signMessage(typeData);
 
-    // Execute the transaction
     const executeTransaction = await fetchExecuteTransaction(
       userAddress,
       JSON.stringify(typeData),
@@ -89,10 +124,26 @@ export const invokeContract = async (
       options
     );
 
+    // If this was an Argent wallet, create a new session after successful transaction
+    if (wallet === "argent") {
+      try {
+        await SessionService.createArgentSession(
+          account,
+          process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+          process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter",
+          json.publicKey
+        );
+        toast.success("Created new session for future transactions");
+      } catch (error) {
+        console.error("Failed to create session:", error);
+        // Don't throw - transaction was still successful
+      }
+    }
+
     return executeTransaction.transactionHash;
   } catch (error) {
     console.error("Error invoking contract:", error);
-    return null;
+    throw error;
   }
 };
 
