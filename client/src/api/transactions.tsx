@@ -6,7 +6,7 @@ import {
   type GaslessOptions,
   SEPOLIA_BASE_URL,
 } from "@avnu/gasless-sdk";
-import { Account, RpcProvider, constants, num, selector } from "starknet";
+import { Account, CallData, RpcProvider, constants, num, selector } from "starknet";
 import { toast } from "react-toastify";
 
 const options: GaslessOptions = {
@@ -22,6 +22,10 @@ const options: GaslessOptions = {
  * @param wallet - The wallet type ('argent' or 'braavos')
  * @returns The transaction hash if successful, null otherwise
  */
+// src/api/transactions.tsx
+
+// src/api/transactions.tsx
+
 export const invokeContract = async (
   userAddress: string,
   userToken: string,
@@ -51,17 +55,42 @@ export const invokeContract = async (
         
         if (sessionAccount) {
           console.log("Using session for transaction");
-          const tx = await sessionAccount.execute({
-            contractAddress: user.session.allowedMethods[0]["Contract Address"],
+
+          // First build the transaction with AVNU paymaster
+          const contractCall = {
+            contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
             entrypoint: "increase_counter",
             calldata: []
+          };
+
+          // Get the paymaster data
+          const typeData = await fetchBuildTypedData(
+            userAddress,
+            [contractCall],
+            undefined,
+            undefined,
+            options
+          );
+
+          // Execute directly with session account
+          const tx = await sessionAccount.execute({
+            contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+            entrypoint: "increase_counter",
+            calldata: CallData.compile([]), // Using CallData from starknet.js
+            metadata: {
+              paymaster: {
+                ...options,
+                paymentDetails: typeData // Include paymaster data
+              }
+            }
           });
+
           return tx.transaction_hash;
         }
       }
     }
 
-    // If we get here, we need a password
+    // Fallback to regular transaction if no session...
     if (!password) {
       throw new Error("Password required for transaction");
     }
@@ -85,20 +114,10 @@ export const invokeContract = async (
     const json = await response.json();
     const privateKeyDecrypted = decryptPrivateKey(json.privateKey, password);
 
-    if (!privateKeyDecrypted) {
-      throw new Error("Failed to decrypt private key");
-    }
-
     // Create regular account instance
     const account = new Account(provider, userAddress, privateKeyDecrypted);
 
     // Build type data for AVNU's paymaster
-    const contractCall = {
-      contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
-      entrypoint: process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter",
-      calldata: []
-    };
-
     const typeData = await fetchBuildTypedData(
       userAddress,
       [contractCall],
@@ -117,29 +136,12 @@ export const invokeContract = async (
       options
     );
 
-    // If this was an Argent wallet, create a new session after successful transaction
-    if (wallet === "argent") {
-      try {
-        await SessionService.createArgentSession(
-          account,
-          process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
-          process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter",
-          json.publicKey
-        );
-        toast.success("Created new session for future transactions");
-      } catch (error) {
-        console.error("Failed to create session:", error);
-        // Don't throw - transaction was still successful
-      }
-    }
-
     return executeTransaction.transactionHash;
   } catch (error) {
     console.error("Error invoking contract:", error);
     throw error;
   }
 };
-
 /**
  * Retrieves the current counter value from the contract.
  * @returns The current counter value, or 0 if an error occurs

@@ -28,10 +28,19 @@ export class SessionService {
   ) {
     // Generate a new key pair for this session
     const privateKey = ec.starkCurve.utils.randomPrivateKey();
+        // Create numeric object from Uint8Array
+        const privateKeyObj = {};
+        for (let i = 0; i < privateKey.length; i++) {
+            privateKeyObj[i] = privateKey[i];
+        }
+    
+   
     const dappKey: DappKey = {
       privateKey,
       publicKey: ec.starkCurve.getStarkKey(privateKey),
     };
+
+
 
     // Calculate session expiry (24 hours from now)
     const expiry = Math.floor((Date.now() + 1000 * 60 * 60 * 24) / 1000);
@@ -94,7 +103,7 @@ export class SessionService {
       user.session = {
         expiry: expiry * 1000,  // Convert to milliseconds when storing
         wallet: 'argent',
-        dappKey: dappKey.privateKey,
+        dappKey: privateKeyObj,
         publicDappKey: dappKey.publicKey,
         signature: stark.formatSignature(accountSessionSignature),
         allowedMethods: sessionParams.allowedMethods,
@@ -119,7 +128,7 @@ export class SessionService {
    * @param provider - The RPC provider instance
    * @param address - The account address
    * @returns Session account if valid, null otherwise
-   */
+   *
   static async getArgentSessionAccount(provider: RpcProvider, address: string) {
     try {
       console.log('=== START getArgentSessionAccount ===');
@@ -180,6 +189,88 @@ export class SessionService {
       console.log('=== END getArgentSessionAccount ===');
     }
   }
+*/
+
+static async getArgentSessionAccount(provider: RpcProvider, address: string) {
+  try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user?.session) {
+          console.log('No session found');
+          return null;
+      }
+
+      const { session } = user;
+      
+      // Debug log the session data
+      console.log('Session data:', {
+          dappKeyType: typeof session.dappKey,
+          dappKey: session.dappKey
+      });
+
+      if (this.isSessionExpired(session)) return null;
+
+      // Convert the numeric object to Uint8Array
+      let privateKeyBytes: Uint8Array;
+      try {
+          // Check if dappKey is an object
+          if (session.dappKey && typeof session.dappKey === 'object') {
+              // Convert the numeric object to array
+              const keyArray = new Uint8Array(32); // Assuming 32 bytes key
+              for (let i = 0; i < 32; i++) {
+                  keyArray[i] = session.dappKey[i] || 0;
+              }
+              privateKeyBytes = keyArray;
+              
+              // Debug log
+              console.log('Converted privateKeyBytes:', {
+                  length: privateKeyBytes.length,
+                  bytes: Array.from(privateKeyBytes)
+              });
+          } else {
+              throw new Error(`Invalid dappKey format: ${typeof session.dappKey}`);
+          }
+      } catch (error) {
+          console.error('Error processing dappKey:', error);
+          throw error;
+      }
+
+      const dappKey: DappKey = {
+          privateKey: privateKeyBytes,
+          publicKey: session.publicDappKey
+      };
+
+      // Debug log
+      console.log('DappKey created:', {
+          hasPrivateKey: !!dappKey.privateKey,
+          privateKeyLength: dappKey.privateKey.length,
+          publicKey: dappKey.publicKey
+      });
+
+      const sessionRequest = createSessionRequest(
+          session.allowedMethods,
+          Math.floor(session.expiry / 1000),
+          {
+              projectID: process.env.NEXT_PUBLIC_PROJECT_ID || "invisible-wallet",
+              txFees: [],
+          },
+          dappKey.publicKey
+      );
+
+      const sessionAccount = await buildSessionAccount({
+          accountSessionSignature: session.signature,
+          sessionRequest,
+          chainId: constants.StarknetChainId.SN_SEPOLIA,
+          provider,
+          address,
+          dappKey,
+      });
+
+      return sessionAccount;
+  } catch (error) {
+      console.error('Error in getArgentSessionAccount:', error);
+      throw error;
+  }
+}
 
   /**
    * Checks if a session has expired
