@@ -1,9 +1,8 @@
 import {
-  type SessionParams,
-  type DappKey,
-  type OffChainSession,
   buildSessionAccount,
   createSessionRequest,
+  type DappKey,
+  type SessionParams,
 } from "@argent/x-sessions";
 import { Account, constants, ec, RpcProvider, stark } from "starknet";
 
@@ -93,7 +92,7 @@ export class SessionService {
 
       // Update user's session data
       user.session = {
-        expiry: Number(sessionParams.expiry) * 1000, // Convert to milliseconds
+        expiry: expiry * 1000,  // Convert to milliseconds when storing
         wallet: 'argent',
         dappKey: dappKey.privateKey,
         publicDappKey: dappKey.publicKey,
@@ -122,37 +121,63 @@ export class SessionService {
    * @returns Session account if valid, null otherwise
    */
   static async getArgentSessionAccount(provider: RpcProvider, address: string) {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user?.session) return null;
-
-    const { session } = user;
-    if (this.isSessionExpired(session)) {
-      this.clearSession();
-      return null;
-    }
-
-    // Recreate session request from stored data
-    const sessionRequest = createSessionRequest(
-      session.allowedMethods,
-      BigInt(Math.floor(session.expiry / 1000)),
-      { projectID: process.env.NEXT_PUBLIC_PROJECT_ID || "invisible-wallet" },
-      session.dappKey,
-    );
-
     try {
-      // Build and return the session account
-      return await buildSessionAccount({
+      console.log('=== START getArgentSessionAccount ===');
+      
+      const user = JSON.parse(localStorage.getItem('user'));
+      console.log('User:', JSON.stringify(user, null, 2));
+
+      if (!user?.session) {
+        console.log('No session found in user data');
+        return null;
+      }
+
+      const { session } = user;
+      console.log('Session:', JSON.stringify(session, null, 2));
+
+      if (this.isSessionExpired(session)) {
+        console.log('Session has expired');
+        return null;
+      }
+
+      // Log each step
+      console.log('Step 1: Creating DappKey');
+      const dappKey: DappKey = {
+        privateKey: session.dappKey,
+        publicKey: session.publicDappKey,
+      };
+
+      console.log('Step 2: Creating session request');
+      const sessionRequest = createSessionRequest(
+        session.allowedMethods,
+        Math.floor(session.expiry / 1000),  // Convert back to seconds for request
+        {
+          projectID: process.env.NEXT_PUBLIC_PROJECT_ID || "invisible-wallet",
+          txFees: [],
+        },
+        dappKey.publicKey,
+      );
+
+      console.log('Step 3: Building session account');
+      const sessionAccount = await buildSessionAccount({
         accountSessionSignature: session.signature,
         sessionRequest,
         chainId: constants.StarknetChainId.SN_SEPOLIA,
         provider,
         address,
-        dappKey: session.dappKey,
+        dappKey,
       });
+
+      console.log('Step 4: Session account built successfully');
+      return sessionAccount;
+
     } catch (error) {
-      console.error('Error building session account:', error);
-      this.clearSession();
+      console.error('=== ERROR in getArgentSessionAccount ===');
+      console.error('Error:', error);
+      console.error('Stack:', error.stack);
       return null;
+    } finally {
+      console.log('=== END getArgentSessionAccount ===');
     }
   }
 
@@ -162,7 +187,13 @@ export class SessionService {
    * @returns true if session has expired, false otherwise
    */
   static isSessionExpired(session: any): boolean {
-    return Date.now() >= session.expiry;
+    console.log('Checking expiry:', {
+      now: Date.now(),
+      sessionExpiry: session.expiry,
+      hasExpired: Date.now() >= session.expiry,
+      difference: (session.expiry - Date.now()) / 1000 / 60, // minutes remaining
+    });
+    return Date.now() >= session.expiry;  // Both in milliseconds
   }
 
   /**
@@ -175,4 +206,16 @@ export class SessionService {
       localStorage.setItem('user', JSON.stringify(user));
     }
   }
+}
+
+interface StoredSession {
+  expiry: number;
+  wallet: 'argent';
+  dappKey: string;  // Hex string
+  publicDappKey: string;
+  signature: string[];
+  allowedMethods: Array<{
+    'Contract Address': string;
+    selector: string;
+  }>;
 }

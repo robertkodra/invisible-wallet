@@ -12,10 +12,12 @@ import { useAuthContext } from "@/hooks/useAuthContext";
 import { useCounter } from "@/hooks/useCounter";
 import { useModal } from "@/hooks/useModal";
 import { AppConfig } from "@/utils/AppConfig";
+import { useGetProfile } from "@/hooks/useGetProfile";
 
 export default function Index() {
   const { user, dispatch } = useAuthContext();
   const { isOpen, openModal, closeModal } = useModal();
+  const { argentPublicKey, isLoading: profileLoading } = useGetProfile();
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [userAddress, setUserAddress] = useState<{
@@ -83,22 +85,49 @@ export default function Index() {
     openModal();
   };
 
-  const handleCounterContract = (wallet: "argent" | "braavos") => {
+  const handleCounterContract = async (wallet: "argent" | "braavos") => {
     if (!user) {
       toast.error("Please log in to increase the counter.");
       return;
     }
 
-    const hasWallet =
-      wallet === "argent" ? user.argent_account : user.braavos_account;
+    const walletAddress = wallet === "argent" ? argentPublicKey : null;
+    const hasValidSession = user.session?.wallet === wallet && 
+      Date.now() < user.session.expiry;
 
-    if (!hasWallet) {
+    console.log("Transaction check:", {
+      walletAddress,
+      hasValidSession,
+      wallet,
+      sessionWallet: user.session?.wallet,
+      argentPublicKey
+    });
+
+    if (!walletAddress && !hasValidSession) {
       toast.error(`Please deploy a ${wallet} wallet first.`);
       return;
     }
 
-    setModalAction({ type: "increase", wallet });
-    openModal();
+    setIsLoading(true);
+    try {
+      const result = await invokeContract(
+        walletAddress!,
+        user.token,
+        hasValidSession ? null : undefined,
+        wallet
+      );
+      
+      if (result) {
+        showWalletDeployedToast(result, "Counter increased successfully!");
+      } else {
+        toast.error("Failed to increase counter. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error increasing counter:", error);
+      toast.error("Failed to increase counter. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleModalSubmit = async (password: string) => {
@@ -223,12 +252,8 @@ export default function Index() {
                   <div className="flex justify-center">
                     <ActionButton
                       onClick={() => handleCounterContract("argent")}
-                      isDisabled={!user || !user.argent_account}
-                      isLoading={
-                        isLoading &&
-                        modalAction.type === "increase" &&
-                        modalAction.wallet === "argent"
-                      }
+                      isDisabled={!user || (!argentPublicKey && !user.session)}
+                      isLoading={isLoading || profileLoading}
                       text={"Increase Counter"}
                       loadingText="Increasing..."
                       color="argent"

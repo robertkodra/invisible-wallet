@@ -1,12 +1,12 @@
-import { Account, RpcProvider, Call, num, selector } from "starknet";
-import {
-  GaslessOptions,
-  SEPOLIA_BASE_URL,
-  fetchBuildTypedData,
-  fetchExecuteTransaction,
-} from "@avnu/gasless-sdk";
 import { decryptPrivateKey } from "@/utils/encryption";
 import { SessionService } from "@/services/SessionService";
+import {
+  fetchBuildTypedData,
+  fetchExecuteTransaction,
+  type GaslessOptions,
+  SEPOLIA_BASE_URL,
+} from "@avnu/gasless-sdk";
+import { Account, RpcProvider, constants, num, selector } from "starknet";
 import { toast } from "react-toastify";
 
 const options: GaslessOptions = {
@@ -30,51 +30,38 @@ export const invokeContract = async (
 ): Promise<string | null> => {
   try {
     const provider = new RpcProvider({
-      nodeUrl: process.env.RPC_URL as string,
+      nodeUrl: process.env.NEXT_PUBLIC_RPC_URL || "https://starknet-sepolia.public.blastapi.io",
     });
 
-    const contractCall = {
-      contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
-      entrypoint: process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter",
-      calldata: []
-    };
-
-    // Handle Argent wallet with session
+    // Try to get session account first
     if (wallet === "argent") {
-      const sessionAccount = await SessionService.getArgentSessionAccount(provider, userAddress);
+      const user = JSON.parse(localStorage.getItem('user'));
+      console.log("Session check:", {
+        walletAddress: userAddress,
+        hasSession: !!user?.session,
+        wallet,
+        sessionWallet: user?.session?.wallet
+      });
 
-      if (sessionAccount) {
-        try {
-          // Execute directly with session account
-          const tx = await sessionAccount.execute(contractCall);
-          
-          // Use AVNU's paymaster
-          const typeData = await fetchBuildTypedData(
-            userAddress,
-            [tx],
-            undefined,
-            undefined,
-            options
-          );
-
-          const userSignature = await sessionAccount.signMessage(typeData);
-
-          const executeTransaction = await fetchExecuteTransaction(
-            userAddress,
-            JSON.stringify(typeData),
-            userSignature,
-            options
-          );
-
-          return executeTransaction.transactionHash;
-        } catch (e) {
-          console.error("Session execution error:", (e as SignSessionError).cause);
-          // If session execution fails, fall back to password flow
+      if (user?.session?.wallet === wallet) {
+        const sessionAccount = await SessionService.getArgentSessionAccount(
+          provider, 
+          userAddress
+        );
+        
+        if (sessionAccount) {
+          console.log("Using session for transaction");
+          const tx = await sessionAccount.execute({
+            contractAddress: user.session.allowedMethods[0]["Contract Address"],
+            entrypoint: "increase_counter",
+            calldata: []
+          });
+          return tx.transaction_hash;
         }
       }
     }
 
-    // If no session (or Braavos wallet), use password flow
+    // If we get here, we need a password
     if (!password) {
       throw new Error("Password required for transaction");
     }
@@ -106,6 +93,12 @@ export const invokeContract = async (
     const account = new Account(provider, userAddress, privateKeyDecrypted);
 
     // Build type data for AVNU's paymaster
+    const contractCall = {
+      contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+      entrypoint: process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter",
+      calldata: []
+    };
+
     const typeData = await fetchBuildTypedData(
       userAddress,
       [contractCall],
