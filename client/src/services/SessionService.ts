@@ -1,65 +1,58 @@
 import {
-  SignSessionError,
-  SessionParams,
-  openSession,
+  type SessionParams,
+  type DappKey,
+  type OffChainSession,
   buildSessionAccount,
   createSessionRequest,
-  DappKey,
-  OffChainSession
 } from "@argent/x-sessions";
 import { Account, constants, ec, RpcProvider, stark } from "starknet";
 
+/**
+ * Service class for managing Argent X sessions
+ * Handles creation, retrieval, and management of session keys for gasless transactions
+ */
 export class SessionService {
-  private static SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+  /** Duration of a session in milliseconds (24 hours) */
+  private static SESSION_DURATION = 24 * 60 * 60 * 1000;
 
+  /**
+   * Creates a new Argent session for gasless transactions
+   * @param account - The Starknet account instance
+   * @param contractAddress - The address of the contract to interact with
+   * @param methodSelector - The method selector (function name) allowed for this session
+   * @returns Session creation result including parameters, signature, and keys
+   */
   static async createArgentSession(
     account: Account, 
     contractAddress: string, 
-    methodSelector: string
+    methodSelector: string,
   ) {
-    console.log("Creating Argent session with params:", {
-      contractAddress,
-      methodSelector,
-      accountAddress: account.address
-    });
-
-    // Generate private key and create DappKey object
+    // Generate a new key pair for this session
     const privateKey = ec.starkCurve.utils.randomPrivateKey();
     const dappKey: DappKey = {
       privateKey,
-      publicKey: ec.starkCurve.getStarkKey(privateKey)
+      publicKey: ec.starkCurve.getStarkKey(privateKey),
     };
-    
-    console.log("Created DappKey:", {
-      privateKeyType: typeof dappKey.privateKey,
-      publicKeyType: typeof dappKey.publicKey,
-      publicKey: dappKey.publicKey
-    });
 
-    const expiry = Math.floor((Date.now() + 1000 * 60 * 60 * 24) / 1000) as any;
-    console.log("EXPIRY TYPE:", typeof expiry);
+    // Calculate session expiry (24 hours from now)
+    const expiry = Math.floor((Date.now() + 1000 * 60 * 60 * 24) / 1000);
 
+    // Prepare session parameters
     const sessionParams: SessionParams = {
-      allowedMethods: [
-        {
-          "Contract Address": contractAddress, 
-          selector: methodSelector
-        }
-      ],
-      expiry: expiry,
+      allowedMethods: [{
+        "Contract Address": contractAddress, 
+        selector: methodSelector,
+      }],
+      expiry,
       publicDappKey: dappKey.publicKey,
       metaData: {
         projectID: process.env.NEXT_PUBLIC_PROJECT_ID || "invisible-wallet",
-        txFees: []
-      }
+        txFees: [], // Empty array since we're using AVNU paymaster
+      },
     };
 
     try {
-        console.log('inicia el try')
-        console.log('account: ', account)
-        console.log('account type', typeof account)
-
-      // Sign the session request directly with the account
+      // Sign the session request with the account
       const accountSessionSignature = await account.signMessage({
         domain: {
           name: "Session",
@@ -83,10 +76,8 @@ export class SessionService {
           root: contractAddress,
         },
       });
-      console.log('paso openSession')
-      console.log('expiry ',sessionParams.expiry)
-      console.log('type expiry', typeof expiry)
 
+      // Create the session request for future use
       const sessionRequest = createSessionRequest(
         sessionParams.allowedMethods,
         sessionParams.expiry,
@@ -94,21 +85,20 @@ export class SessionService {
         dappKey.publicKey,
       );
 
-      console.log('paso create session')
-
-      // Store session in user data
+      // Store session in localStorage
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user) {
         throw new Error('No user found in localStorage');
       }
 
+      // Update user's session data
       user.session = {
-        expiry: Number(sessionParams.expiry) * 1000,
+        expiry: Number(sessionParams.expiry) * 1000, // Convert to milliseconds
         wallet: 'argent',
         dappKey: dappKey.privateKey,
         publicDappKey: dappKey.publicKey,
         signature: stark.formatSignature(accountSessionSignature),
-        allowedMethods: sessionParams.allowedMethods
+        allowedMethods: sessionParams.allowedMethods,
       };
 
       localStorage.setItem('user', JSON.stringify(user));
@@ -117,20 +107,20 @@ export class SessionService {
         sessionParams,
         accountSessionSignature,
         sessionRequest,
-        dappKey
+        dappKey,
       };
     } catch (error) {
       console.error('Error creating Argent session:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        cause: error.cause,
-        stack: error.stack
-      });
       throw error;
     }
   }
 
+  /**
+   * Retrieves a session account if a valid session exists
+   * @param provider - The RPC provider instance
+   * @param address - The account address
+   * @returns Session account if valid, null otherwise
+   */
   static async getArgentSessionAccount(provider: RpcProvider, address: string) {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user?.session) return null;
@@ -141,21 +131,23 @@ export class SessionService {
       return null;
     }
 
+    // Recreate session request from stored data
     const sessionRequest = createSessionRequest(
       session.allowedMethods,
       BigInt(Math.floor(session.expiry / 1000)),
       { projectID: process.env.NEXT_PUBLIC_PROJECT_ID || "invisible-wallet" },
-      session.dappKey
+      session.dappKey,
     );
 
     try {
+      // Build and return the session account
       return await buildSessionAccount({
         accountSessionSignature: session.signature,
         sessionRequest,
         chainId: constants.StarknetChainId.SN_SEPOLIA,
         provider,
         address,
-        dappKey: session.dappKey
+        dappKey: session.dappKey,
       });
     } catch (error) {
       console.error('Error building session account:', error);
@@ -164,10 +156,18 @@ export class SessionService {
     }
   }
 
+  /**
+   * Checks if a session has expired
+   * @param session - The session object to check
+   * @returns true if session has expired, false otherwise
+   */
   static isSessionExpired(session: any): boolean {
     return Date.now() >= session.expiry;
   }
 
+  /**
+   * Clears the current session from localStorage
+   */
   static clearSession() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (user) {
