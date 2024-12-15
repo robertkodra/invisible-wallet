@@ -23,6 +23,7 @@ import {
 
 import { AuthAction } from "@/context/AuthContext";
 import { encryptPrivateKey } from "@/utils/encryption";
+import { SessionService } from "@/services/SessionService";
 
 const options: GaslessOptions = {
   baseUrl: SEPOLIA_BASE_URL,
@@ -34,6 +35,8 @@ const createArgentWallet = async (
   dispatch: Dispatch<AuthAction>,
   password: string
 ): Promise<{ success: boolean; data?: string; error?: string }> => {
+  console.log("Starting Argent wallet creation...");
+  
   const provider = new RpcProvider({
     nodeUrl: process.env.RPC_URL as string,
   });
@@ -41,13 +44,12 @@ const createArgentWallet = async (
   // Generating the private key with Stark Curve
   const privateKeyAX = stark.randomAddress();
   const starkKeyPubAX = ec.starkCurve.getStarkKey(privateKeyAX);
+  console.log("Generated keys - Public key:", starkKeyPubAX);
 
-  // Using Argent X Account v0.4.0 class hash
   const accountClassHash = process.env.NEXT_PUBLIC_ARGENT_CLASSHASH as string;
+  console.log("Using Argent class hash:", accountClassHash);
 
-  // Calculate future address of the ArgentX account
   const axSigner = new CairoCustomEnum({ Starknet: { pubkey: starkKeyPubAX } });
-  // Set the dApp Guardian address
   const axGuardian = new CairoOption<unknown>(CairoOptionVariant.None);
 
   const AXConstructorCallData = CallData.compile({
@@ -61,8 +63,8 @@ const createArgentWallet = async (
     AXConstructorCallData,
     0
   );
+  console.log("Calculated contract address:", contractAddress);
 
-  // Initiating Account
   const account = new Account(provider, contractAddress, privateKeyAX);
 
   const initialValue: Call[] = [
@@ -76,6 +78,7 @@ const createArgentWallet = async (
   ];
 
   try {
+    console.log("Building typed data for deployment...");
     const typeData = await fetchBuildTypedData(
       contractAddress,
       initialValue,
@@ -85,6 +88,7 @@ const createArgentWallet = async (
       accountClassHash
     );
 
+    console.log("Signing deployment message...");
     const userSignature = await account.signMessage(typeData);
 
     const deploymentData: DeploymentData = {
@@ -94,6 +98,7 @@ const createArgentWallet = async (
       calldata: AXConstructorCallData.map((value) => num.toHex(value)),
     };
 
+    console.log("Executing deployment transaction...");
     const executeTransaction = await fetchExecuteTransaction(
       contractAddress,
       JSON.stringify(typeData),
@@ -102,6 +107,9 @@ const createArgentWallet = async (
       deploymentData
     );
 
+    console.log("Deployment transaction hash:", executeTransaction.transactionHash);
+
+    console.log("Updating backend with wallet information...");
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/profile/`,
       {
@@ -119,31 +127,54 @@ const createArgentWallet = async (
     );
 
     if (response.ok) {
-      // update local storage with public_key
       let user = JSON.parse(localStorage.getItem("user"));
 
       if (user) {
+        console.log("Updating user data with new wallet...");
         user.argent_account = contractAddress;
-        localStorage.setItem("user", JSON.stringify(user));
+        user.argent_public_key = starkKeyPubAX; // Store public key for session usage
+        
+        // Create session after successful wallet deployment
+        try {
+          console.log("Creating initial Argent session...");
+          const sessionResult = await SessionService.createArgentSession(
+            account,
+            process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
+            process.env.NEXT_PUBLIC_CONTRACT_ENTRY_POINT_INCREASE_COUNTER || "increase_counter"
+          );
+          
+          console.log("Session created successfully:", {
+            expiry: sessionResult.sessionParams?.expiry 
+              ? new Date(Number(sessionResult.sessionParams.expiry) * 1000).toISOString()
+              : "No expiry",
+            dappKey: sessionResult.dappKey ? "Present" : "Missing"
+          });
 
+          // Re-fetch user from localStorage as it was updated by SessionService
+          user = JSON.parse(localStorage.getItem("user"));
+          console.log("Updated user data with session:", {
+            hasSession: !!user.session,
+            sessionExpiry: user.session?.expiry 
+              ? new Date(user.session.expiry).toISOString()
+              : "None"
+          });
+        } catch (sessionError) {
+          console.error("Failed to create initial session:", sessionError);
+          // Continue with wallet deployment even if session creation fails
+        }
+
+        localStorage.setItem("user", JSON.stringify(user));
         dispatch({ type: "LOGIN", payload: user });
+        console.log("User state updated successfully");
       }
 
       return { success: true, data: executeTransaction.transactionHash };
-    } else {
-      const errorData = await response.json();
-      return {
-        success: false,
-        error: errorData.error || "Failed to update profile",
-      };
     }
-  } catch (error: any) {
-    console.log(error);
-    console.error("Error:", error);
-    return {
-      success: false,
-      error: error.message || "An unexpected error occurred",
-    };
+
+    throw new Error(`Failed to update profile: ${response.statusText}`);
+  } catch (error) {
+    console.error("Error in wallet creation:", error);
+    return { success: false, error: error.message };
   }
 };
 
