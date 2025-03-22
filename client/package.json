@@ -15,6 +15,7 @@
     "check-types": "tsc --noEmit --pretty"
   },
   "dependencies": {
+    "@argent/x-sessions": "^6.7.10",
     "@avnu/gasless-sdk": "^0.1.6",
     "axios": "^1.7.7",
     "crypto-js": "^4.2.0",
